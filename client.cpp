@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <iostream>
+#include <string>
+
 
 // Need to link with Ws2_32.lib, Mswsock.lib, and Advapi32.lib
 #pragma comment (lib, "Ws2_32.lib")
@@ -16,31 +19,52 @@
 
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "27015"
-#define DEFAULT_IP "192.168.1.254"
+#define DEFAULT_IP "192.168.1.68"
 
-int __cdecl main(int argc, char **argv) 
+class Client
 {
-    WSADATA wsaData;
-    SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo *result = NULL,
-                    *ptr = NULL,
-                    hints;
-    const char *sendbuf = "this is a test";
-    char recvbuf[DEFAULT_BUFLEN];
-    int iResult;
-    int recvbuflen = DEFAULT_BUFLEN;
+    private:
+        WSADATA wsaData;
+        SOCKET ConnectSocket = INVALID_SOCKET;
+        struct addrinfo *result = NULL,
+                        *ptr = NULL,
+                        hints;
+        //Char array of what is being sent
+        char *sendbuf;
+        //Char array of what is being recieved
+        char recvbuf[DEFAULT_BUFLEN];
+        //Integer of the length of recvbuf
+        int iResult;
+        int recvbuflen = DEFAULT_BUFLEN;
     
-    // Validate the parameters
-    if (argc != 2) {
-        printf("usage: %s server-name\n", argv[0]);
-        return 1;
-    }
+    public:
+        Client(){}
 
-    // Initialize Winsock
+        int init();
+
+        int sendData();   
+
+        int close();
+};
+
+int __cdecl main(void) 
+{
+    Client c = Client();
+    c.init();
+    c.sendData();
+    c.close();
+}
+
+int Client::init()
+{
     iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
     if (iResult != 0) {
         printf("WSAStartup failed with error: %d\n", iResult);
-        return 1;
+        return 0;
+    }
+    else
+    {
+        printf("WSAStartup success\n");
     }
 
     ZeroMemory( &hints, sizeof(hints) );
@@ -49,11 +73,15 @@ int __cdecl main(int argc, char **argv)
     hints.ai_protocol = IPPROTO_TCP;
 
     // Resolve the server address and port
-    iResult = getaddrinfo(argv[1], DEFAULT_PORT, &hints, &result);
+    iResult = getaddrinfo(DEFAULT_IP, DEFAULT_PORT, &hints, &result);
     if ( iResult != 0 ) {
         printf("getaddrinfo failed with error: %d\n", iResult);
         WSACleanup();
-        return 1;
+        return 0;
+    }
+    else
+    {
+        printf("getaddrinfo success\n");
     }
 
     // Attempt to connect to an address until one succeeds
@@ -65,7 +93,11 @@ int __cdecl main(int argc, char **argv)
         if (ConnectSocket == INVALID_SOCKET) {
             printf("socket failed with error: %ld\n", WSAGetLastError());
             WSACleanup();
-            return 1;
+            return 0;
+        }
+        else
+        {
+            printf("socket success\n");
         }
 
         // Connect to server.
@@ -83,19 +115,40 @@ int __cdecl main(int argc, char **argv)
     if (ConnectSocket == INVALID_SOCKET) {
         printf("Unable to connect to server!\n");
         WSACleanup();
-        return 1;
+        return 0;
     }
-
-    // Send an initial buffer
-    iResult = send( ConnectSocket, sendbuf, (int)strlen(sendbuf), 0 );
-    if (iResult == SOCKET_ERROR) {
-        printf("send failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
-        WSACleanup();
-        return 1;
+    else
+    {
+        return 1;   
     }
+}
 
-    printf("Bytes Sent: %ld\n", iResult);
+int Client::sendData()
+{
+    std::string line;
+    char e;
+    while(getline(std::cin, line))
+    {
+        std::cout << "Waiting for input: ";
+
+        sendbuf = &line[0];
+
+        // Send an initial buffer
+        iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0 );
+        if (iResult == SOCKET_ERROR) {
+            printf("send failed with error: %d\n", WSAGetLastError());
+            closesocket(ConnectSocket);
+            WSACleanup();
+            return 0;
+        }
+    }
+    
+    return 1;
+}
+
+int Client::close()
+{
+        printf("Bytes Sent: %ld\n", iResult);
 
     // shutdown the connection since no more data will be sent
     iResult = shutdown(ConnectSocket, SD_SEND);
@@ -111,11 +164,19 @@ int __cdecl main(int argc, char **argv)
 
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
         if ( iResult > 0 )
-            printf("Bytes received: %d\n", iResult);
+        {
+            printf("Bytes received: %d\n", iResult); 
+            printf(recvbuf);
+        }
         else if ( iResult == 0 )
+        {
             printf("Connection closed\n");
+        }
         else
+        {
             printf("recv failed with error: %d\n", WSAGetLastError());
+        }
+            
 
     } while( iResult > 0 );
 
